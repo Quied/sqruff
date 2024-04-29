@@ -6,7 +6,6 @@ use std::rc::Rc;
 
 use ahash::{AHashMap, AHashSet};
 use dyn_clone::DynClone;
-use dyn_hash::DynHash;
 use dyn_ord::DynEq;
 use itertools::{enumerate, Itertools};
 use serde::ser::SerializeMap;
@@ -119,10 +118,14 @@ impl ErasedSegment {
     }
 }
 
-pub trait Segment: Any + DynEq + DynClone + DynHash + Debug + CloneSegment {
+pub trait Segment: Any + DynEq + DynClone + Debug + CloneSegment {
     #[allow(clippy::new_ret_no_self, clippy::wrong_self_convention)]
     fn new(&self, _segments: Vec<ErasedSegment>) -> ErasedSegment {
         unimplemented!("{}", std::any::type_name::<Self>())
+    }
+
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
     }
 
     fn as_object_reference(&self) -> Node<ObjectReferenceSegment> {
@@ -331,32 +334,6 @@ pub trait Segment: Any + DynEq + DynClone + DynHash + Debug + CloneSegment {
         buff
     }
 
-    fn path_to(&self, other: &ErasedSegment) -> Vec<PathStep> {
-        let midpoint = other;
-
-        for (idx, seg) in enumerate(self.segments()) {
-            let mut steps = vec![PathStep {
-                segment: self.clone_box(),
-                idx,
-                len: self.segments().len(),
-                code_idxs: self.code_indices(),
-            }];
-
-            if seg.eq(midpoint) {
-                return steps;
-            }
-
-            let res = seg.path_to(midpoint);
-
-            if !res.is_empty() {
-                steps.extend(res);
-                return steps;
-            }
-        }
-
-        Vec::new()
-    }
-
     fn iter_patches(&self, templated_file: &TemplatedFile) -> Vec<FixPatch> {
         let mut acc = Vec::new();
 
@@ -389,7 +366,7 @@ pub trait Segment: Any + DynEq + DynClone + DynHash + Debug + CloneSegment {
     }
 
     // TODO: remove &self?
-    fn match_grammar(&self) -> Option<Box<dyn Matchable>> {
+    fn match_grammar(&self) -> Option<Rc<dyn Matchable>> {
         None
     }
 
@@ -553,7 +530,7 @@ pub trait Segment: Any + DynEq + DynClone + DynHash + Debug + CloneSegment {
     #[allow(unused_variables)]
     fn apply_fixes(
         &self,
-        dialect: Dialect,
+        dialect: &Dialect,
         mut fixes: AHashMap<Uuid, AnchorEditInfo>,
     ) -> (ErasedSegment, Vec<ErasedSegment>, Vec<ErasedSegment>, bool) {
         if fixes.is_empty() || self.segments().is_empty() {
@@ -616,7 +593,7 @@ pub trait Segment: Any + DynEq + DynClone + DynHash + Debug + CloneSegment {
         let seg_queue = seg_buffer.clone();
         let mut seg_buffer = Vec::new();
         for seg in seg_queue {
-            let (s, pre, post, validated) = seg.apply_fixes(dialect.clone(), fixes.clone());
+            let (s, pre, post, validated) = seg.apply_fixes(dialect, fixes.clone());
             seg_buffer.extend(pre);
             seg_buffer.push(s);
             seg_buffer.extend(post);
@@ -629,14 +606,21 @@ pub trait Segment: Any + DynEq + DynClone + DynHash + Debug + CloneSegment {
 
         (self.new(seg_buffer), Vec::new(), Vec::new(), false)
     }
+}
 
+pub trait SegmentExt {
+    fn raw_segments_with_ancestors(&self) -> Vec<(ErasedSegment, Vec<PathStep>)>;
+    fn path_to(&self, other: &ErasedSegment) -> Vec<PathStep>;
+}
+
+impl SegmentExt for ErasedSegment {
     fn raw_segments_with_ancestors(&self) -> Vec<(ErasedSegment, Vec<PathStep>)> {
         let mut buffer: Vec<(ErasedSegment, Vec<PathStep>)> = Vec::new();
         let code_idxs: Vec<usize> = self.code_indices();
 
         for (idx, seg) in self.segments().iter().enumerate() {
             let new_step = vec![PathStep {
-                segment: self.clone_box(),
+                segment: self.clone(),
                 idx,
                 len: self.segments().len(),
                 code_idxs: code_idxs.clone(),
@@ -666,10 +650,35 @@ pub trait Segment: Any + DynEq + DynClone + DynHash + Debug + CloneSegment {
 
         buffer
     }
+
+    fn path_to(&self, other: &ErasedSegment) -> Vec<PathStep> {
+        let midpoint = other;
+
+        for (idx, seg) in enumerate(self.segments()) {
+            let mut steps = vec![PathStep {
+                segment: self.clone_box(),
+                idx,
+                len: self.segments().len(),
+                code_idxs: self.code_indices(),
+            }];
+
+            if seg.eq(midpoint) {
+                return steps;
+            }
+
+            let res = seg.path_to(midpoint);
+
+            if !res.is_empty() {
+                steps.extend(res);
+                return steps;
+            }
+        }
+
+        Vec::new()
+    }
 }
 
 dyn_clone::clone_trait_object!(Segment);
-dyn_hash::hash_trait_object!(Segment);
 
 impl PartialEq for dyn Segment {
     fn eq(&self, other: &Self) -> bool {
@@ -692,6 +701,22 @@ impl PartialEq for dyn Segment {
 }
 
 impl Eq for ErasedSegment {}
+
+impl Hash for dyn Segment {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.type_name().hash(state);
+
+        if let Some(marker) = &self.get_raw() {
+            marker.hash(state);
+        }
+
+        if let Some(marker) = &self.get_position_marker() {
+            marker.source_position().hash(state);
+        } else {
+            None::<usize>.hash(state);
+        }
+    }
+}
 
 pub fn position_segments(
     segments: &[ErasedSegment],
@@ -934,7 +959,7 @@ impl Segment for IdentifierSegment {
     }
 
     fn get_type(&self) -> &'static str {
-        "identifier"
+        "naked_identifier"
     }
     fn is_code(&self) -> bool {
         true
@@ -1371,8 +1396,8 @@ impl Segment for SymbolSegment {
         Vec::new()
     }
 
-    fn edit(&self, _raw: Option<String>, _source_fixes: Option<Vec<SourceFix>>) -> ErasedSegment {
-        todo!()
+    fn edit(&self, raw: Option<String>, _source_fixes: Option<Vec<SourceFix>>) -> ErasedSegment {
+        SymbolSegment::create(&raw.unwrap(), &self.position_maker, <_>::default())
     }
 
     fn instance_types(&self) -> AHashSet<String> {

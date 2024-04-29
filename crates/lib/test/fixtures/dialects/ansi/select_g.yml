@@ -6,24 +6,24 @@ file:
       - select_clause_element:
         - expression:
           - cast_expression:
-            - remove me: 'NULL'
+            - null_literal: 'NULL'
             - remove me: '::'
             - data_type:
               - '': INT
         - alias_expression:
           - keyword: AS
-          - identifier: user_id
+          - naked_identifier: user_id
       - comma: ','
       - select_clause_element:
         - expression:
           - cast_expression:
-            - remove me: 'NULL'
+            - null_literal: 'NULL'
             - remove me: '::'
             - data_type:
               - '': INT
         - alias_expression:
           - keyword: AS
-          - identifier: is_paid
+          - naked_identifier: is_paid
     - limit_clause:
       - keyword: LIMIT
       - numeric_literal: '0'

@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::fmt::Debug;
+use std::rc::Rc;
 
 use ahash::{AHashMap, AHashSet};
-use itertools::Itertools;
 
 use crate::core::parser::lexer::Matcher;
 use crate::core::parser::matchable::Matchable;
@@ -22,6 +22,12 @@ pub struct Dialect {
     bracket_collections: AHashMap<String, AHashSet<BracketPair>>,
 }
 
+impl PartialEq for Dialect {
+    fn eq(&self, other: &Self) -> bool {
+        self.root_segment_name == other.root_segment_name
+    }
+}
+
 impl Dialect {
     pub fn new(root_segment_name: &'static str) -> Self {
         Dialect { root_segment_name, ..Default::default() }
@@ -32,7 +38,7 @@ impl Dialect {
         iter: impl IntoIterator<Item = (Cow<'static, str>, DialectElementType)> + Clone,
     ) {
         #[cfg(debug_assertions)]
-        check_unique_names(self, &iter.clone().into_iter().collect_vec());
+        check_unique_names(self, &iter.clone().into_iter().collect::<Vec<_>>());
 
         self.library.extend(iter);
     }
@@ -106,7 +112,7 @@ impl Dialect {
         }
     }
 
-    pub fn r#ref(&self, name: &str) -> Box<dyn Matchable> {
+    pub fn r#ref(&self, name: &str) -> Rc<dyn Matchable> {
         // TODO:
         // if !self.expanded {
         //     panic!("Dialect must be expanded before use.");
@@ -168,7 +174,7 @@ impl Dialect {
                         );
 
                         self.library
-                            .insert(n.into(), DialectElementType::Matchable(Box::new(parser)));
+                            .insert(n.into(), DialectElementType::Matchable(Rc::new(parser)));
                     }
                 }
             }
@@ -179,11 +185,12 @@ impl Dialect {
         self.root_segment_name
     }
 
-    pub fn get_root_segment(&self) -> Box<dyn Matchable> {
+    pub fn get_root_segment(&self) -> Rc<dyn Matchable> {
         self.r#ref(self.root_segment_name())
     }
 }
 
+#[cfg(debug_assertions)]
 fn check_unique_names(dialect: &Dialect, xs: &[(Cow<'static, str>, DialectElementType)]) {
     let mut names = AHashSet::new();
 
