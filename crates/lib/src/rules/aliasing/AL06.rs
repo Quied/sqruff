@@ -98,9 +98,9 @@ impl Rule for RuleAL06 {
     }
 
     fn eval(&self, rule_cx: RuleContext) -> Vec<LintResult> {
-        
         // ==== < > ===
-        // let children = FunctionalContext::new(rule_cx.clone()).segment().children(None);
+        // let children =
+        // FunctionalContext::new(rule_cx.clone()).segment().children(None);
 
         let from_expression_elements =
             rule_cx.segment.recursive_crawl(&["from_expression_element"], true, None, true);
@@ -133,8 +133,7 @@ mod tests {
                     JOIN orders AS o ON u.id = o.user_id"#;
 
         let violations = lint(fail_str.into(), "ansi".into(), rules(), None, None).unwrap();
-        
-        
+
         // assert_eq!(violations.len(), 4);
     }
 

@@ -73,6 +73,10 @@ impl Segments {
         Self { base: vec![segment], templated_file }
     }
 
+    // pub fn get_child() -> Segments {
+
+    // }
+
     pub fn children(&self, predicate: PredicateType) -> Segments {
         let mut child_segments = Vec::new();
 
