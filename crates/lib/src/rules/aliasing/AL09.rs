@@ -35,7 +35,7 @@ impl Rule for RuleAL09 {
             let alias_expression = clause_element.child(&["alias_expression"]);
 
             if let (Some(alias_expression), Some(column)) = (alias_expression, column) {
-                if column.child(&["naked_identifier"]).is_some()
+                if column.child(&["identifier", "naked_identifier"]).is_some()
                     || column.child(&["quoted_identifier"]).is_some()
                 {
                     let whitespace = clause_element.child(&["whitespace"]).expect("` `");
@@ -45,14 +45,14 @@ impl Rule for RuleAL09 {
                             quoted_identifier.clone()
                         } else {
                             column
-                                .children(&["naked_identifier"])
+                                .children(&["identifier","naked_identifier"])
                                 .last()
                                 .expect("No naked_identifier found")
                                 .clone()
                         };
 
                     let alias_identifier: Option<ErasedSegment> = alias_expression
-                        .child(&["naked_identifier"])
+                        .child(&["identifier", "naked_identifier"])
                         .or(alias_expression.child(&["quoted_identifier"]));
 
                     if column_identifier.get_raw_upper()
