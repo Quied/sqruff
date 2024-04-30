@@ -34,29 +34,39 @@ impl Rule for RuleAL09 {
             let column = clause_element.child(&["column_reference"]);
             let alias_expression = clause_element.child(&["alias_expression"]);
 
-            if let (Some(alias_expression), Some(column)) = (alias_expression, column) {
+            if let Some(column) = column {
+                if let Some(alias_expression) = alias_expression {
                 if column.child(&["identifier", "naked_identifier"]).is_some()
                     || column.child(&["quoted_identifier"]).is_some()
                 {
-                    let whitespace = clause_element.child(&["whitespace"]).expect("` `");
+                    let whitespace = clause_element.child(&["whitespace"]).unwrap();
 
                     let column_identifier =
                         if let Some(quoted_identifier) = column.child(&["quoted_identifier"]) {
                             quoted_identifier.clone()
                         } else {
                             column
-                                .children(&["identifier","naked_identifier"])
+                                .children(&["identifier", "naked_identifier"])
                                 .last()
                                 .expect("No naked_identifier found")
                                 .clone()
                         };
 
-                    let alias_identifier: Option<ErasedSegment> = alias_expression
-                        .child(&["identifier", "naked_identifier"])
-                        .or(alias_expression.child(&["quoted_identifier"]));
+            
+                        let alias_identifier = match alias_expression
+                        .child(&["identifier", "naked_identifier"]) {
+                        Some(child) => child,
+                        None => {
+                            alias_expression
+                                .child(&["quoted_identifier"])
+                                .expect("quoted_identifier are None")
+                        }
+                    };
+                    
+                    
 
                     if column_identifier.get_raw_upper()
-                        == alias_identifier.unwrap().get_raw_upper()
+                        == alias_identifier.get_raw_upper()
                     {
                         let mut fixes: Vec<LintFix> = Vec::new();
 
@@ -65,7 +75,7 @@ impl Rule for RuleAL09 {
 
                         violations.push(LintResult::new(
                             Some(clause_element_raw_segment[0].clone()),
-                            Vec::new(),
+                            fixes,
                             None,
                             Some(format!("Column should not be self-aliased.")),
                             None,
@@ -74,6 +84,7 @@ impl Rule for RuleAL09 {
                 }
             }
         }
+    }
         violations
     }
 
