@@ -162,14 +162,83 @@ impl Rule for RuleST08 {
 
 #[cfg(test)]
 mod tests {
-    fn test_fail_distinct_with_parenthesis_1() {}
-    fn test_fail_distinct_with_parenthesis_2() {}
-    fn test_fail_distinct_with_parenthesis_3() {}
-    fn test_fail_distinct_with_parenthesis_4() {}
-    fn test_fail_distinct_with_parenthesis_5() {}
-    fn test_fail_distinct_with_parenthesis_6() {}
-    fn test_fail_distinct_with_parenthesis_7() {}
-    fn test_pass_no_distinct() {}
-    fn test_fail_distinct_column_inside_count() {}
-    fn test_fail_distinct_concat_inside_count() {}
+
+
+    use pretty_assertions::assert_eq;
+
+    use crate::api::simple::fix;
+    use crate::core::rules::base::{Erased, ErasedRule};
+    use crate::rules::structure::ST08::RuleST08;
+
+    fn rules() -> Vec<ErasedRule> {
+        vec![RuleST08::default().erased()]
+    }
+
+    fn test_fail_distinct_with_parenthesis_1() {
+        let fail_str = "SELECT DISTINCT(a)";
+        let fix_str = "SELECT DISTINCT a";
+
+        let fixed = fix(fail_str.into(), rules());
+        assert_eq!(fix_str, fixed);
+    }
+    fn test_fail_distinct_with_parenthesis_2() {
+        let fail_str = "SELECT DISTINCT(a + b) * c";
+        let fix_str = "SELECT DISTINCT (a + b) * c";
+
+        let fixed = fix(fail_str.into(), rules());
+        assert_eq!(fix_str, fixed);
+    }
+    fn test_fail_distinct_with_parenthesis_3() {
+        let fail_str = "SELECT DISTINCT (a)";
+        let fix_str = "SELECT DISTINCT a";
+
+        let fixed = fix(fail_str.into(), rules());
+        assert_eq!(fix_str, fixed);
+    }
+    fn test_fail_distinct_with_parenthesis_4() {
+        let pass_str = "SELECT DISTINCT(a)";
+
+    }
+    fn test_fail_distinct_with_parenthesis_5() {
+        let fail_str = r#"SELECT DISTINCT (field_1)
+                                FROM my_table"#;
+
+        let fix_str = "SELECT DISTINCT field_1
+                             FROM my_table";
+
+        let fixed = fix(fail_str.into(), rules());
+        assert_eq!(fix_str, fixed);
+    }
+    fn test_fail_distinct_with_parenthesis_6() {
+        let fail_str = "SELECT DISTINCT(a), b";
+        let fix_str = "SELECT DISTINCT a,b";
+
+        let fixed = fix(fail_str.into(), rules());
+        assert_eq!(fix_str, fixed);
+    }
+    fn test_fail_distinct_with_parenthesis_7() {
+        let pass_str = r#"SELECT DISTINCT ON(bcolor) bcolor, fcolor
+                                FROM distinct_demo"#;
+
+    }
+
+    fn test_pass_no_distinct() {
+        let fail_str = "SELECT a,b";
+    }
+
+    fn test_fail_distinct_column_inside_count() {
+        let fail_str = "SELECT COUNT(DISTINCT(unique_key))";
+        let fix_str = "SELECT COUNT(DISTINCT unique_key)";
+
+        let fixed = fix(fail_str.into(), rules());
+        assert_eq!(fix_str, fixed);
+    }
+    
+    fn test_fail_distinct_concat_inside_count() {
+        let fail_str = "SELECT COUNT (DISTINCT(CONCAT(col1, '-', col2, '-', col3)))";
+        let fix_str = "SELECT COUNT (DISTINCT CONCAT(col1, '-', col2, '-', col3))";
+
+        let fixed = fix(fail_str.into(), rules());
+        assert_eq!(fix_str, fixed);
+    }
 }
