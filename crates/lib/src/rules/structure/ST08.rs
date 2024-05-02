@@ -29,7 +29,10 @@ impl RuleST08 {
             "before",
             context.config.unwrap(),
         )
-        .replace(anchor.clone(), &Self::filter_meta(anchor.segments(), false)); // ? 
+        .replace(
+            anchor.clone(),
+            &Self::filter_meta(&anchor.segments()[1..anchor.segments().len() - 1], false),
+        ); // ? 
 
         Some((anchor.clone(), seq))
     }
@@ -83,8 +86,6 @@ impl Rule for RuleST08 {
             let bracketed = expression
                 .children(Some(|it| it.get_type() == "bracketed"))
                 .find_first::<fn(&_) -> _>(None);
-
-            dbg!(&bracketed);
 
             if expression[0].segments().len() == 1 {
                 if let Some((a, s)) =
@@ -195,11 +196,9 @@ mod tests {
 
     #[test]
     fn test_fail_distinct_with_parenthesis_5() {
-        let fail_str = r#"SELECT DISTINCT (field_1)
-                                FROM my_table"#;
+        let fail_str = r#"SELECT DISTINCT (field_1) FROM my_table"#;
 
-        let fix_str = "SELECT DISTINCT field_1
-                             FROM my_table";
+        let fix_str = "SELECT DISTINCT field_1 FROM my_table";
 
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
