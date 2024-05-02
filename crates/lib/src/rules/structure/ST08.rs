@@ -22,14 +22,17 @@ impl RuleST08 {
         context: RuleContext,
         bracketed: Segments,
     ) -> Option<(ErasedSegment, ReflowSequence)> {
-        let anchor = &bracketed.get(1, None).unwrap();
+        let anchor = &bracketed.get(0, None).unwrap();
         let seq = ReflowSequence::from_around_target(
             anchor,
             context.parent_stack[0].clone(),
             "before",
             context.config.unwrap(),
         )
-        .replace(anchor.clone(), &Self::filter_meta(anchor.segments(), false)); // ? 
+        .replace(
+            anchor.clone(),
+            &Self::filter_meta(&anchor.segments()[1..anchor.segments().len() - 1], false),
+        ); // ? 
 
         Some((anchor.clone(), seq))
     }
@@ -72,41 +75,38 @@ impl Rule for RuleST08 {
 
             let selected_elements =
                 children.select(Some(|it| it.is_type("select_clause_element")), None, None, None);
-            let first_element = selected_elements.find_first::<fn(&_)->_>(None);
+            let first_element = selected_elements.find_first::<fn(&_) -> _>(None);
 
-            // let expression = first_element.and_then(|element| {
-            //     if let Some(child) = element.children(&["expression"]).first() {
-            //         Some(child.clone())
-            //     } else {
-            //         Some(element.clone())
-            //     }
-            // });
+            let expression = first_element
+                .children(Some(|it| it.is_type("expression")))
+                .find_first::<fn(&_) -> _>(None);
 
-            let expression = first_element.find_first::<fn(&_)->_>(None);
+            let expression = if expression.is_empty() { first_element } else { expression };
 
-            // let cloned_expression = expression.clone();
-            // let bracketed_children = cloned_expression.children(&["bracketed"]);
-            // let bracketed = bracketed_children.first();
+            let bracketed = expression
+                .children(Some(|it| it.get_type() == "bracketed"))
+                .find_first::<fn(&_) -> _>(None);
 
-            let bracketed = children.find_first::<fn(&_)->_>(None);
-
-
-            if expression[0].segments().len() == 1 {
-                if let Some((a, s)) = self.clone().remove_unneeded_brackets(rule_cx.clone(), bracketed) {
-                    anchor = Some(a);
-                    seq = Some(s);
+                if !modifier.is_empty() && !bracketed.is_empty() {
+                    if expression[0].segments().len() == 1 {
+                        if let Some((a, s)) =
+                            self.clone().remove_unneeded_brackets(rule_cx.clone(), bracketed)
+                        {
+                            anchor = Some(a);
+                            seq = Some(s);
+                        }
+                        else {
+                            anchor = Some(modifier[0].clone());
+                            seq = Some(ReflowSequence::from_around_target(
+                                &modifier[0],
+                                rule_cx.parent_stack[0].clone(),
+                                "after",
+                                rule_cx.config.clone().unwrap(),
+                            ));
+                        }
+                    }
                 }
-            }
-             else {
-                anchor = Some(modifier[0].clone());
-                seq = Some(ReflowSequence::from_around_target(
-                    &modifier[0],
-                    rule_cx.parent_stack[0].clone(),
-                    "after",
-                    rule_cx.config.clone().unwrap(),
-                ));
-            }
-        } else if rule_cx.segment.is_type("function") {
+            }  else if rule_cx.segment.is_type("function") {
             anchor = Some(rule_cx.parent_stack[rule_cx.parent_stack.len() - 1].clone());
 
             if anchor.clone().unwrap().is_type("expression")
@@ -125,7 +125,7 @@ impl Rule for RuleST08 {
                 || function_name.unwrap().get_raw_upper() != Some(String::from("DISTINCT"))
                 || bracketed.is_none()
             {
-              return Vec::new();
+                return Vec::new();
             }
 
             let edits = vec![SymbolSegment::create(
@@ -199,11 +199,9 @@ mod tests {
 
     #[test]
     fn test_fail_distinct_with_parenthesis_5() {
-        let fail_str = r#"SELECT DISTINCT (field_1)
-                                FROM my_table"#;
+        let fail_str = r#"SELECT DISTINCT (field_1) FROM my_table"#;
 
-        let fix_str = "SELECT DISTINCT field_1
-                             FROM my_table";
+        let fix_str = "SELECT DISTINCT field_1 FROM my_table";
 
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
