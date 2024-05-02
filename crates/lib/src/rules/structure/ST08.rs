@@ -120,14 +120,24 @@ impl Rule for RuleST08 {
                 || function_name.unwrap().get_raw_upper() != Some(String::from("DISTINCT"))
                 || bracketed.is_none()
             {
-                return Vec::new();
+                let edits = vec![SymbolSegment::create(
+                    "DISTINCT",
+                    &<_>::default(),
+                    SymbolSegmentNewArgs { r#type: "function_name_identifier" },
+                )];
+    
+                let fixes = vec![LintFix::replace(anchor.clone().unwrap(), edits.to_vec(), None)];
+    
+                return vec![LintResult::new(anchor, fixes, None, None, None)];
             }
 
-            let edits = vec![
-                (KeywordSegment("DISTINCT"), WhitespaceSegment())
-            ];
+            let edits = vec![SymbolSegment::create(
+                "DISTINCT",
+                &<_>::default(),
+                SymbolSegmentNewArgs { r#type: "function_name_identifier" },
+            )];
 
-            let fixes = vec![LintFix::replace(anchor.clone().unwrap(), edits, None)];
+            let fixes = vec![LintFix::replace(anchor.clone().unwrap(), edits.to_vec(), None)];
 
             return vec![LintResult::new(anchor, fixes, None, None, None)];
         }
