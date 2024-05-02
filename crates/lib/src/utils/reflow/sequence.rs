@@ -282,57 +282,55 @@ impl ReflowSequence {
     // https://github.com/sqlfluff/sqlfluff/blob/baceed9907908e055b79ca50ce6203bcd7949f39/src/sqlfluff/utils/reflow/sequence.py#L397
     pub fn replace(&mut self, target: ErasedSegment, edit: &[ErasedSegment]) -> Self {
         let target_raws = target.get_raw_segments();
-
-        let mut edit_raws = Vec::new();
-
+    
+        let mut edit_raws: Vec<ErasedSegment> = Vec::new();
+    
         for seg in edit {
             edit_raws.extend_from_slice(&seg.get_raw_segments());
         }
-
+    
         let trim_amount = target.path_to(&target_raws[0]).len();
-
-        for edit_raw in edit_raws.clone() {
+    
+        for edit_raw in &edit_raws {
             self.depth_map.copy_depth_info(
                 target_raws[0].clone(),
-                edit_raw,
+                edit_raw.clone(),
                 trim_amount.try_into().unwrap(),
             );
         }
-
-        let current_raws: Vec<_> =
+    
+        let current_raws: Vec<ErasedSegment> =
             self.elements.iter().flat_map(|elem| elem.segments().iter().cloned()).collect();
-
+    
         let start_idx = current_raws.iter().position(|s| *s == target_raws[0]).unwrap();
-        let last_idx =
-            current_raws.iter().position(|s| *s == target_raws[target_raws.len() - 1]).unwrap();
-
+        let last_idx = current_raws.iter().position(|s| *s == *target_raws.last().unwrap()).unwrap();
+    
         let new_elements = Self::elements_from_raw_segments(
             current_raws[..start_idx]
                 .iter()
-                .chain(&edit_raws)
-                .chain(&current_raws[last_idx + 1..])
+                .chain(edit_raws.iter())
+                .chain(current_raws[last_idx + 1..].iter())
                 .cloned()
                 .collect(),
             &self.depth_map,
             &self.reflow_config,
         );
-
-        let lints: Vec<LintResult> = vec![LintResult::new(
-            target.clone().into(),
-            vec![LintFix::replace(target.clone(), edit.to_vec(), None)],
-            None,
-            None,
-            None,
-        )];
-
+    
         ReflowSequence {
             elements: new_elements,
             root_segment: self.root_segment.clone(),
             reflow_config: self.reflow_config.clone(),
             depth_map: self.depth_map.clone(),
-            lint_results: lints,
+            lint_results: vec![LintResult::new(
+                target.clone().into(),
+                vec![LintFix::replace(target.clone(), edit.to_vec(), None)],
+                None,
+                None,
+                None,
+            )],
         }
     }
+    
 
     pub fn reindent(self) -> Self {
         if !self.lint_results.is_empty() {

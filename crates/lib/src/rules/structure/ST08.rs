@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_fail_distinct_with_parenthesis_5() {
-        let fail_str = r#"SELECT DISTINCT (field_1) FROM my_table"#;
+        let fail_str = r#"SELECT DISTINCT(field_1) FROM my_table"#;
 
         let fix_str = "SELECT DISTINCT field_1 FROM my_table";
 
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn test_fail_distinct_with_parenthesis_6() {
         let fail_str = "SELECT DISTINCT(a), b";
-        let fix_str = "SELECT DISTINCT a,b";
+        let fix_str = "SELECT DISTINCT a, b";
 
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn test_fail_distinct_concat_inside_count() {
-        let fail_str = "SELECT COUNT (DISTINCT(CONCAT(col1, '-', col2, '-', col3)))";
+        let fail_str = "SELECT COUNT(DISTINCT(CONCAT(col1, '-', col2, '-', col3)))";
         let fix_str = "SELECT COUNT (DISTINCT CONCAT(col1, '-', col2, '-', col3))";
 
         let fixed = fix(fail_str.into(), rules());
