@@ -22,7 +22,7 @@ impl RuleST08 {
         context: RuleContext,
         bracketed: Segments,
     ) -> Option<(ErasedSegment, ReflowSequence)> {
-        let anchor = &bracketed.get(1, None).unwrap();
+        let anchor = &bracketed.get(0, None).unwrap();
         let seq = ReflowSequence::from_around_target(
             anchor,
             context.parent_stack[0].clone(),
@@ -72,32 +72,28 @@ impl Rule for RuleST08 {
 
             let selected_elements =
                 children.select(Some(|it| it.is_type("select_clause_element")), None, None, None);
-            let first_element = selected_elements.find_first::<fn(&_)->_>(None);
+            let first_element = selected_elements.find_first::<fn(&_) -> _>(None);
 
-            // let expression = first_element.and_then(|element| {
-            //     if let Some(child) = element.children(&["expression"]).first() {
-            //         Some(child.clone())
-            //     } else {
-            //         Some(element.clone())
-            //     }
-            // });
+            let expression = first_element
+                .children(Some(|it| it.is_type("expression")))
+                .find_first::<fn(&_) -> _>(None);
 
-            let expression = first_element.find_first::<fn(&_)->_>(None);
+            let expression = if expression.is_empty() { first_element } else { expression };
 
-            // let cloned_expression = expression.clone();
-            // let bracketed_children = cloned_expression.children(&["bracketed"]);
-            // let bracketed = bracketed_children.first();
+            let bracketed = expression
+                .children(Some(|it| it.get_type() == "bracketed"))
+                .find_first::<fn(&_) -> _>(None);
 
-            let bracketed = children.find_first::<fn(&_)->_>(None);
-
+            dbg!(&bracketed);
 
             if expression[0].segments().len() == 1 {
-                if let Some((a, s)) = self.clone().remove_unneeded_brackets(rule_cx.clone(), bracketed) {
+                if let Some((a, s)) =
+                    self.clone().remove_unneeded_brackets(rule_cx.clone(), bracketed)
+                {
                     anchor = Some(a);
                     seq = Some(s);
                 }
-            }
-             else {
+            } else {
                 anchor = Some(modifier[0].clone());
                 seq = Some(ReflowSequence::from_around_target(
                     &modifier[0],
@@ -125,7 +121,7 @@ impl Rule for RuleST08 {
                 || function_name.unwrap().get_raw_upper() != Some(String::from("DISTINCT"))
                 || bracketed.is_none()
             {
-              return Vec::new();
+                return Vec::new();
             }
 
             let edits = vec![SymbolSegment::create(
