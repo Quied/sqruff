@@ -54,7 +54,7 @@ impl Rule for RuleST08 {
     }
 
     fn crawl_behaviour(&self) -> Crawler {
-        SegmentSeekerCrawler::new(["select_statement"].into()).into()
+        SegmentSeekerCrawler::new(["select_clause", "function"].into()).into()
     }
 
     fn description(&self) -> &'static str {
@@ -72,31 +72,32 @@ impl Rule for RuleST08 {
 
             let selected_elements =
                 children.select(Some(|it| it.is_type("select_clause_element")), None, None, None);
-            let first_element = selected_elements.first();
+            let first_element = selected_elements.find_first::<fn(&_)->_>(None);
 
-            let expression = first_element.and_then(|element| {
-                if let Some(child) = element.children(&["expression"]).first() {
-                    Some(child.clone())
-                } else {
-                    Some(element.clone())
+            // let expression = first_element.and_then(|element| {
+            //     if let Some(child) = element.children(&["expression"]).first() {
+            //         Some(child.clone())
+            //     } else {
+            //         Some(element.clone())
+            //     }
+            // });
+
+            let expression = first_element.find_first::<fn(&_)->_>(None);
+
+            // let cloned_expression = expression.clone();
+            // let bracketed_children = cloned_expression.children(&["bracketed"]);
+            // let bracketed = bracketed_children.first();
+
+            let bracketed = children.find_first::<fn(&_)->_>(None);
+
+
+            if expression[0].segments().len() == 1 {
+                if let Some((a, s)) = self.clone().remove_unneeded_brackets(rule_cx.clone(), bracketed) {
+                    anchor = Some(a);
+                    seq = Some(s);
                 }
-            });
-
-            let cloned_expression = expression.clone().unwrap();
-            let bracketed_children = cloned_expression.children(&["bracketed"]);
-            let bracketed = bracketed_children.first();
-
-            let take_bracketed = children.find_first::<fn(&_)->_>(None);
-
-            if !modifier.is_empty() && bracketed.is_some() {
-                if expression.unwrap().segments().len() == 1 {
-                    if let Some((a, s)) = self.clone().remove_unneeded_brackets(rule_cx.clone(), take_bracketed) {
-                        anchor = Some(a);
-                        seq = Some(s);
-                    }
-                }
-                
-            } else {
+            }
+             else {
                 anchor = Some(modifier[0].clone());
                 seq = Some(ReflowSequence::from_around_target(
                     &modifier[0],
