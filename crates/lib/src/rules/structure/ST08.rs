@@ -86,11 +86,14 @@ impl Rule for RuleST08 {
             let bracketed_children = cloned_expression.children(&["bracketed"]);
             let bracketed = bracketed_children.first();
 
+            let bbracketed = expression.unwrap().children(&["brakceted"]).first();
+
+            let bb =
+            children.select(Some(|it| it.is_type("select_clause_element")), None, None, None);
+
             if !modifier.is_empty() && bracketed.is_some() {
                 if expression.unwrap().segments().len() == 1 {
-                    // (anchor, seq) =
-                    // self.remove_unneeded_brackets(rule_cx.clone(),
-                    // bracketed.);
+                    (anchor, seq) = self.remove_unneeded_brackets(rule_cx.clone(), cloned_expression);
                 }
             } else {
                 anchor = Some(modifier[0].clone());
@@ -125,9 +128,9 @@ impl Rule for RuleST08 {
                     &<_>::default(),
                     SymbolSegmentNewArgs { r#type: "function_name_identifier" },
                 )];
-    
+
                 let fixes = vec![LintFix::replace(anchor.clone().unwrap(), edits.to_vec(), None)];
-    
+
                 return vec![LintResult::new(anchor, fixes, None, None, None)];
             }
 
@@ -169,6 +172,7 @@ mod tests {
         vec![RuleST08::default().erased()]
     }
 
+    #[test]
     fn test_fail_distinct_with_parenthesis_1() {
         let fail_str = "SELECT DISTINCT(a)";
         let fix_str = "SELECT DISTINCT a";
@@ -176,6 +180,8 @@ mod tests {
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
     }
+
+    #[test]
     fn test_fail_distinct_with_parenthesis_2() {
         let fail_str = "SELECT DISTINCT(a + b) * c";
         let fix_str = "SELECT DISTINCT (a + b) * c";
@@ -183,6 +189,8 @@ mod tests {
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
     }
+
+    #[test]
     fn test_fail_distinct_with_parenthesis_3() {
         let fail_str = "SELECT DISTINCT (a)";
         let fix_str = "SELECT DISTINCT a";
@@ -190,9 +198,12 @@ mod tests {
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
     }
-    fn test_fail_distinct_with_parenthesis_4() {
-        let pass_str = "SELECT DISTINCT(a)";
-    }
+    // #[test]
+    // fn test_fail_distinct_with_parenthesis_4() {
+    //     let pass_str = "SELECT DISTINCT(a)";
+    // }
+
+    #[test]
     fn test_fail_distinct_with_parenthesis_5() {
         let fail_str = r#"SELECT DISTINCT (field_1)
                                 FROM my_table"#;
@@ -203,6 +214,8 @@ mod tests {
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
     }
+
+    #[test]
     fn test_fail_distinct_with_parenthesis_6() {
         let fail_str = "SELECT DISTINCT(a), b";
         let fix_str = "SELECT DISTINCT a,b";
@@ -210,15 +223,19 @@ mod tests {
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
     }
-    fn test_fail_distinct_with_parenthesis_7() {
-        let pass_str = r#"SELECT DISTINCT ON(bcolor) bcolor, fcolor
-                                FROM distinct_demo"#;
-    }
 
-    fn test_pass_no_distinct() {
-        let fail_str = "SELECT a,b";
-    }
+    // #[test]
+    // fn test_fail_distinct_with_parenthesis_7() {
+    //     let pass_str = r#"SELECT DISTINCT ON(bcolor) bcolor, fcolor
+    //                             FROM distinct_demo"#;
+    // }
 
+    // #[test]
+    // fn test_pass_no_distinct() {
+    //     let fail_str = "SELECT a,b";
+    // }
+
+    #[test]
     fn test_fail_distinct_column_inside_count() {
         let fail_str = "SELECT COUNT(DISTINCT(unique_key))";
         let fix_str = "SELECT COUNT(DISTINCT unique_key)";
@@ -227,6 +244,7 @@ mod tests {
         assert_eq!(fix_str, fixed);
     }
 
+    #[test]
     fn test_fail_distinct_concat_inside_count() {
         let fail_str = "SELECT COUNT (DISTINCT(CONCAT(col1, '-', col2, '-', col3)))";
         let fix_str = "SELECT COUNT (DISTINCT CONCAT(col1, '-', col2, '-', col3))";
