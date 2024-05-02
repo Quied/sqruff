@@ -86,14 +86,9 @@ impl Rule for RuleST08 {
             let bracketed_children = cloned_expression.children(&["bracketed"]);
             let bracketed = bracketed_children.first();
 
-            let bbracketed = expression.unwrap().children(&["brakceted"]).first();
-
-            let bb =
-            children.select(Some(|it| it.is_type("select_clause_element")), None, None, None);
-
             if !modifier.is_empty() && bracketed.is_some() {
                 if expression.unwrap().segments().len() == 1 {
-                    (anchor, seq) = self.remove_unneeded_brackets(rule_cx.clone(), cloned_expression);
+                    (anchor, seq) = self.remove_unneeded_brackets(rule_cx.clone(), bracketed);
                 }
             } else {
                 anchor = Some(modifier[0].clone());
