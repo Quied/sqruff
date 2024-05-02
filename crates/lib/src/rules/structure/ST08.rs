@@ -1,23 +1,20 @@
-use std::ascii::AsciiExt;
-use std::mem::replace;
+use itertools::{chain, Itertools};
 
 use crate::core::config::Value;
-use crate::core::parser::segments::base::{ErasedSegment, WhitespaceSegment};
-use crate::core::parser::segments::bracketed;
+use crate::core::parser::segments::base::{
+    ErasedSegment, SymbolSegment, SymbolSegmentNewArgs, WhitespaceSegment, WhitespaceSegmentNewArgs,
+};
 use crate::core::parser::segments::keyword::KeywordSegment;
 use crate::core::rules::base::{Erased, ErasedRule, LintFix, LintResult, Rule};
 use crate::core::rules::context::RuleContext;
 use crate::core::rules::crawlers::{Crawler, SegmentSeekerCrawler};
-use crate::helpers::IndexMap;
-use crate::utils::analysis::query::Query;
+use crate::helpers::ToErasedSegment;
 use crate::utils::functional::context::FunctionalContext;
 use crate::utils::functional::segments::Segments;
-use crate::utils::reflow::sequence::ReflowSequence;
+use crate::utils::reflow::sequence::{Filter, ReflowSequence};
 
 #[derive(Debug, Default, Clone)]
-pub struct RuleST08 {
-    filter_meta: i32,
-}
+pub struct RuleST08 {}
 
 impl RuleST08 {
     pub fn remove_unneeded_brackets(
@@ -31,11 +28,8 @@ impl RuleST08 {
             context.parent_stack[0].clone(),
             "before",
             context.config.unwrap(),
-        );
-
-        let slice_ref = std::slice::from_ref(anchor);
-        //let filtered = replace(&mut anchor, RuleST08::filter_meta(slice_ref, (anchor.segments());
-        
+        )
+        .replace(anchor.clone(), &Self::filter_meta(anchor.segments(), false)); // ? 
 
         (anchor.clone(), seq)
     }
@@ -49,7 +43,6 @@ impl RuleST08 {
         }
         buff
     }
-    
 }
 impl Rule for RuleST08 {
     fn name(&self) -> &'static str {
@@ -69,50 +62,58 @@ impl Rule for RuleST08 {
     }
 
     fn eval(&self, rule_cx: RuleContext) -> Vec<LintResult> {
-        let seq = None;
-        let anchor = None;
-        let children = FunctionalContext::new(rule_cx).segment().children(None);
+        let mut seq = None;
+        let mut anchor = None;
+        let children = FunctionalContext::new(rule_cx.clone()).segment().children(None);
 
         if rule_cx.segment.is_type("select_clause") {
             let modifier =
                 children.select(Some(|it| it.is_type("select_clause_modifier")), None, None, None);
-            let first_element = children
-                .select(Some(|it| it.is_type("select_clause_element")), None, None, None)
-                .first();
+
+            let selected_elements =
+                children.select(Some(|it| it.is_type("select_clause_element")), None, None, None);
+            let first_element = selected_elements.first();
 
             let expression = first_element.and_then(|element| {
                 if let Some(child) = element.children(&["expression"]).first() {
-                    Some(child)
+                    Some(child.clone())
                 } else {
-                    Some(element)
+                    Some(element.clone())
                 }
             });
 
-            let bracketed = expression.unwrap().children(&["bracketed"]).first();
+            let cloned_expression = expression.clone().unwrap();
+            let bracketed_children = cloned_expression.children(&["bracketed"]);
+            let bracketed = bracketed_children.first();
 
             if !modifier.is_empty() && bracketed.is_some() {
                 if expression.unwrap().segments().len() == 1 {
-                    // (anchor, seq) = self.remove_unneeded_brackets(rule_cx,
-                    // bracketed)
+                    // (anchor, seq) =
+                    // self.remove_unneeded_brackets(rule_cx.clone(),
+                    // bracketed.);
                 }
             } else {
-                anchor = Some(modifier[0]);
+                anchor = Some(modifier[0].clone());
                 seq = Some(ReflowSequence::from_around_target(
                     &modifier[0],
-                    rule_cx.parent_stack[0],
+                    rule_cx.parent_stack[0].clone(),
                     "after",
-                    rule_cx.config.unwrap(),
+                    rule_cx.config.clone().unwrap(),
                 ));
             }
         } else if rule_cx.segment.is_type("function") {
-            anchor = Some(rule_cx.parent_stack[rule_cx.parent_stack.len() - 1]);
+            anchor = Some(rule_cx.parent_stack[rule_cx.parent_stack.len() - 1].clone());
 
-            if anchor.unwrap().is_type("expression") || anchor.unwrap().segments().len() != 1 {
+            if anchor.clone().unwrap().is_type("expression")
+                || anchor.clone().unwrap().segments().len() != 1
+            {
                 return Vec::new();
             }
 
-            let function_name =
-                children.select(Some(|it| it.is_type("function_name")), None, None, None).first();
+            let selected_functions =
+                children.select(Some(|it| it.is_type("function_name")), None, None, None);
+            let function_name = selected_functions.first();
+
             let bracketed = children.first();
 
             if function_name.is_none()
@@ -122,37 +123,22 @@ impl Rule for RuleST08 {
                 return Vec::new();
             }
 
-            return vec![LintResult::new(
-                anchor.clone(),
-                vec![LintFix::replace(
-                    anchor.clone().unwrap(),
-                    vec![
-                        KeywordSegment::new("DISTINCT".to_owned()),
-                        WhitespaceSegment::default(),
-                    ],
-                )],
-                None,
-                None,
-                None,
-            )];
-            
-            // return Some(LintResult {
-            //     anchor: anchor.clone(),
-            //     fixes: vec![LintFix::replace(
-            //         anchor.clone(),
-            //         vec![
-            //             KeywordSegment::new("DISTINCT"),
-            //             WhitespaceSegment::default(),
-            //         ]
-            //         .into_iter()
-            //         .chain(self.filter_meta(bracketed.unwrap().segments)[1..bracketed.
-            // unwrap().segments.len() - 1].to_vec().into_iter())
-            //         .collect(),
-            //     )],
-            // });
+            let edits = vec![
+                (KeywordSegment("DISTINCT"), WhitespaceSegment())
+            ];
 
-            if seq.is_some() && anchor.is_some() {
-                // let fixes = seq
+            let fixes = vec![LintFix::replace(anchor.clone().unwrap(), edits, None)];
+
+            return vec![LintResult::new(anchor, fixes, None, None, None)];
+        }
+
+        if let Some(seq) = seq {
+            if let Some(anchor) = anchor {
+                let fixes = seq.respace(false, Filter::All).fixes();
+
+                if !fixes.is_empty() {
+                    return vec![LintResult::new(Some(anchor), fixes, None, None, None)];
+                }
             }
         }
 
@@ -162,7 +148,6 @@ impl Rule for RuleST08 {
 
 #[cfg(test)]
 mod tests {
-
 
     use pretty_assertions::assert_eq;
 
@@ -197,7 +182,6 @@ mod tests {
     }
     fn test_fail_distinct_with_parenthesis_4() {
         let pass_str = "SELECT DISTINCT(a)";
-
     }
     fn test_fail_distinct_with_parenthesis_5() {
         let fail_str = r#"SELECT DISTINCT (field_1)
@@ -219,7 +203,6 @@ mod tests {
     fn test_fail_distinct_with_parenthesis_7() {
         let pass_str = r#"SELECT DISTINCT ON(bcolor) bcolor, fcolor
                                 FROM distinct_demo"#;
-
     }
 
     fn test_pass_no_distinct() {
@@ -233,7 +216,7 @@ mod tests {
         let fixed = fix(fail_str.into(), rules());
         assert_eq!(fix_str, fixed);
     }
-    
+
     fn test_fail_distinct_concat_inside_count() {
         let fail_str = "SELECT COUNT (DISTINCT(CONCAT(col1, '-', col2, '-', col3)))";
         let fix_str = "SELECT COUNT (DISTINCT CONCAT(col1, '-', col2, '-', col3))";

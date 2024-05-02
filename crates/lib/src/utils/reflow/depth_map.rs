@@ -3,7 +3,8 @@ use std::hash::{Hash, Hasher};
 use ahash::{AHashMap, AHashSet};
 use uuid::Uuid;
 
-use crate::core::parser::segments::base::{ErasedSegment, PathStep, SegmentExt as _};
+use crate::core::parser::segments::base::{ErasedSegment, PathStep, Segment, SegmentExt as _};
+use crate::core::parser::segments::raw::RawSegment;
 
 /// An element of the stack_positions property of DepthInfo.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -57,6 +58,18 @@ impl DepthMap {
 
     pub fn get_depth_info(&self, seg: &ErasedSegment) -> DepthInfo {
         self.depth_info[&seg.get_uuid().unwrap()].clone()
+    }
+
+    pub fn copy_depth_info(
+        &mut self,
+        anchor: ErasedSegment,
+        new_segment: ErasedSegment,
+        trim: u32,
+    ) {
+        self.depth_info.insert(
+            new_segment.get_uuid().unwrap(),
+            self.get_depth_info(&anchor).trim(trim.try_into().unwrap()),
+        );
     }
 
     pub fn from_parent(parent: &ErasedSegment) -> Self {
@@ -119,6 +132,36 @@ impl DepthInfo {
             stack_hash_set,
             stack_class_types,
             stack_positions,
+        }
+    }
+
+    pub fn trim(&self, amount: usize) -> DepthInfo {
+        // Return a DepthInfo object with some amount trimmed.
+        if amount == 0 {
+            // The trivial case.
+            return self.clone();
+        }
+
+        let mut slice_set: AHashSet<_> = AHashSet::new();
+        for &hash in &self.stack_hashes[self.stack_hashes.len() - amount..] {
+            slice_set.insert(hash);
+        }
+
+        let new_hash_set: AHashSet<_> =
+            self.stack_hash_set.difference(&slice_set).cloned().collect();
+
+        DepthInfo {
+            stack_depth: self.stack_depth - amount,
+            stack_hashes: self.stack_hashes[..self.stack_hashes.len() - amount].to_vec(),
+            stack_hash_set: new_hash_set.clone(),
+            stack_class_types: self.stack_class_types[..self.stack_class_types.len() - amount]
+                .to_vec(),
+            stack_positions: self
+                .stack_positions
+                .iter()
+                .filter(|(k, _)| new_hash_set.contains(k))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
         }
     }
 
