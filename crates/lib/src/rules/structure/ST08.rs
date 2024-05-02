@@ -21,7 +21,7 @@ impl RuleST08 {
         self,
         context: RuleContext,
         bracketed: Segments,
-    ) -> (ErasedSegment, ReflowSequence) {
+    ) -> Option<(ErasedSegment, ReflowSequence)> {
         let anchor = &bracketed.get(1, None).unwrap();
         let seq = ReflowSequence::from_around_target(
             anchor,
@@ -31,7 +31,7 @@ impl RuleST08 {
         )
         .replace(anchor.clone(), &Self::filter_meta(anchor.segments(), false)); // ? 
 
-        (anchor.clone(), seq)
+        Some((anchor.clone(), seq))
     }
 
     pub fn filter_meta(segments: &[ErasedSegment], keep_meta: bool) -> Vec<ErasedSegment> {
@@ -62,8 +62,8 @@ impl Rule for RuleST08 {
     }
 
     fn eval(&self, rule_cx: RuleContext) -> Vec<LintResult> {
-        let mut seq = None;
-        let mut anchor = None;
+        let mut seq: Option<ReflowSequence> = None;
+        let mut anchor: Option<ErasedSegment> = None;
         let children = FunctionalContext::new(rule_cx.clone()).segment().children(None);
 
         if rule_cx.segment.is_type("select_clause") {
@@ -86,10 +86,16 @@ impl Rule for RuleST08 {
             let bracketed_children = cloned_expression.children(&["bracketed"]);
             let bracketed = bracketed_children.first();
 
+            let take_bracketed = children.find_first::<fn(&_)->_>(None);
+
             if !modifier.is_empty() && bracketed.is_some() {
                 if expression.unwrap().segments().len() == 1 {
-                    (anchor, seq) = self.remove_unneeded_brackets(rule_cx.clone(), bracketed);
+                    if let Some((a, s)) = self.clone().remove_unneeded_brackets(rule_cx.clone(), take_bracketed) {
+                        anchor = Some(a);
+                        seq = Some(s);
+                    }
                 }
+                
             } else {
                 anchor = Some(modifier[0].clone());
                 seq = Some(ReflowSequence::from_around_target(
@@ -118,15 +124,7 @@ impl Rule for RuleST08 {
                 || function_name.unwrap().get_raw_upper() != Some(String::from("DISTINCT"))
                 || bracketed.is_none()
             {
-                let edits = vec![SymbolSegment::create(
-                    "DISTINCT",
-                    &<_>::default(),
-                    SymbolSegmentNewArgs { r#type: "function_name_identifier" },
-                )];
-
-                let fixes = vec![LintFix::replace(anchor.clone().unwrap(), edits.to_vec(), None)];
-
-                return vec![LintResult::new(anchor, fixes, None, None, None)];
+              return Vec::new();
             }
 
             let edits = vec![SymbolSegment::create(
