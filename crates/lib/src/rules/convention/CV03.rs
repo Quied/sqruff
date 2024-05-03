@@ -1,7 +1,5 @@
 use crate::core::config::Value;
-use crate::core::parser::segments::base::{
-    ErasedSegment, Segment, SymbolSegment, SymbolSegmentNewArgs,
-};
+use crate::core::parser::segments::base::{ ErasedSegment, SymbolSegment};
 use crate::core::rules::base::{ErasedRule, LintFix, LintResult, Rule};
 use crate::core::rules::context::RuleContext;
 use crate::core::rules::crawlers::{Crawler, SegmentSeekerCrawler};
@@ -14,9 +12,7 @@ pub struct RuleCV03 {
 
 impl Default for RuleCV03 {
     fn default() -> Self {
-        RuleCV03 {
-            select_clause_trailing_comma: "reuired".to_string(),
-        }
+        RuleCV03 { select_clause_trailing_comma: "reuired".to_string() }
     }
 }
 
@@ -50,39 +46,40 @@ impl Rule for RuleCV03 {
             if last_content.is_type("comma") {
                 if last_content.get_position_marker().is_none() {
                     fixes = vec![LintFix::delete(last_content)];
-                }
-            } else {
-                let comma_pos = last_content.get_position_marker().unwrap().source_position();
+                } else {
+                    let comma_pos = last_content.get_position_marker().unwrap().source_position();
 
-                for seg in rule_cx.segment.segments() {
-                    if seg.is_type("comma") {
-                        if seg.get_position_marker().is_none() {
-                            continue;
-                        }
-                    } else if seg.get_position_marker().unwrap().source_position() == comma_pos {
-                        if *seg != last_content.clone() {
-                            dbg!(
-                                "Preventing deletion of {}, because source position is the same \
-                                 as {}. Templated positions are {} and {}.",
-                                &last_content,
-                                &seg,
-                                &last_content.get_position_marker().clone(),
-                                &seg.get_position_marker(),
-                            );
+                    for seg in rule_cx.segment.segments() {
+                        if seg.is_type("comma") {
+                            if seg.get_position_marker().is_none() {
+                                continue;
+                            }
+                        } else if seg.get_position_marker().unwrap().source_position() == comma_pos
+                        {
+                            if *seg != last_content.clone() {
+                                dbg!(
+                                    "Preventing deletion of {}, because source position is the \
+                                     same as {}. Templated positions are {} and {}.",
+                                    &last_content,
+                                    &seg,
+                                    &last_content.get_position_marker().clone(),
+                                    &seg.get_position_marker(),
+                                );
 
-                            break;
+                                break;
+                            }
+                        } else {
+                            fixes = vec![LintFix::delete(last_content.clone())];
                         }
-                    } else {
-                        fixes = vec![LintFix::delete(last_content.clone())];
                     }
+                    return vec![LintResult::new(
+                        Some(last_content),
+                        fixes,
+                        None,
+                        format!("Trailing comma in select statement forbidden").into(),
+                        None,
+                    )];
                 }
-                return vec![LintResult::new(
-                    Some(last_content),
-                    fixes,
-                    None,
-                    format!("Trailing comma in select statement forbidden").into(),
-                    None,
-                )];
             }
         } else if self.select_clause_trailing_comma == "require".to_owned() {
             if !last_content.is_type("comma") {
@@ -110,10 +107,8 @@ impl Rule for RuleCV03 {
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
-    use rayon::result;
 
     use crate::api::simple::{fix, lint};
-    use crate::core::dialects::init::get_default_dialect;
     use crate::core::rules::base::{Erased, ErasedRule};
     use crate::rules::convention::CV03::RuleCV03;
 
@@ -122,7 +117,7 @@ mod tests {
     }
 
     fn rules_with_config(select_clause: String) -> Vec<ErasedRule> {
-        vec![RuleCV03 {select_clause_trailing_comma: select_clause}.erased()]
+        vec![RuleCV03 { select_clause_trailing_comma: select_clause }.erased()]
     }
 
     #[test]
@@ -146,7 +141,14 @@ mod tests {
     fn test_forbid_pass() {
         let pass_str = "SELECT a, b FROM foo";
 
-        let violations = lint(pass_str.into(), "ansi".into(), rules_with_config("forbid".to_owned()), None, None).unwrap();
+        let violations = lint(
+            pass_str.into(),
+            "ansi".into(),
+            rules_with_config("forbid".to_owned()),
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(violations, []);
     }
 
@@ -159,6 +161,23 @@ mod tests {
         assert_eq!(fix_str, result);
     }
 
-    // #[test]
-    // fn test_fail_templated() {}
+    #[test]
+    fn test_fail_templated() {
+        let fail_str = r#"
+        SELECT
+        {% for col in ['a', 'b', 'c'] %}
+            {{col}},
+        {% endfor %}
+    FROM tbl
+    "#;
+        let fix_str = r#"
+        SELECT
+        {% for col in ['a', 'b', 'c'] %}
+            {{col}},
+        {% endfor %}
+    FROM tbl"#;
+
+        let result = fix(fail_str.into(), rules_with_config("forbid".to_owned()));
+        assert_eq!(fix_str, result);
+    }
 }
