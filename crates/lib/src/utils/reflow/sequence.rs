@@ -282,15 +282,15 @@ impl ReflowSequence {
     // https://github.com/sqlfluff/sqlfluff/blob/baceed9907908e055b79ca50ce6203bcd7949f39/src/sqlfluff/utils/reflow/sequence.py#L397
     pub fn replace(&mut self, target: ErasedSegment, edit: &[ErasedSegment]) -> Self {
         let target_raws = target.get_raw_segments();
-    
+
         let mut edit_raws: Vec<ErasedSegment> = Vec::new();
-    
+
         for seg in edit {
             edit_raws.extend_from_slice(&seg.get_raw_segments());
         }
-    
+
         let trim_amount = target.path_to(&target_raws[0]).len();
-    
+
         for edit_raw in &edit_raws {
             self.depth_map.copy_depth_info(
                 target_raws[0].clone(),
@@ -298,13 +298,14 @@ impl ReflowSequence {
                 trim_amount.try_into().unwrap(),
             );
         }
-    
+
         let current_raws: Vec<ErasedSegment> =
             self.elements.iter().flat_map(|elem| elem.segments().iter().cloned()).collect();
-    
+
         let start_idx = current_raws.iter().position(|s| *s == target_raws[0]).unwrap();
-        let last_idx = current_raws.iter().position(|s| *s == *target_raws.last().unwrap()).unwrap();
-    
+        let last_idx =
+            current_raws.iter().position(|s| *s == *target_raws.last().unwrap()).unwrap();
+
         let new_elements = Self::elements_from_raw_segments(
             current_raws[..start_idx]
                 .iter()
@@ -315,7 +316,7 @@ impl ReflowSequence {
             &self.depth_map,
             &self.reflow_config,
         );
-    
+
         ReflowSequence {
             elements: new_elements,
             root_segment: self.root_segment.clone(),
@@ -330,7 +331,6 @@ impl ReflowSequence {
             )],
         }
     }
-    
 
     pub fn reindent(self) -> Self {
         if !self.lint_results.is_empty() {

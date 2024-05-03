@@ -87,26 +87,25 @@ impl Rule for RuleST08 {
                 .children(Some(|it| it.get_type() == "bracketed"))
                 .find_first::<fn(&_) -> _>(None);
 
-                if !modifier.is_empty() && !bracketed.is_empty() {
-                    if expression[0].segments().len() == 1 {
-                        if let Some((a, s)) =
-                            self.clone().remove_unneeded_brackets(rule_cx.clone(), bracketed)
-                        {
-                            anchor = Some(a);
-                            seq = Some(s);
-                        }
-                        else {
-                            anchor = Some(modifier[0].clone());
-                            seq = Some(ReflowSequence::from_around_target(
-                                &modifier[0],
-                                rule_cx.parent_stack[0].clone(),
-                                "after",
-                                rule_cx.config.clone().unwrap(),
-                            ));
-                        }
+            if !modifier.is_empty() && !bracketed.is_empty() {
+                if expression[0].segments().len() == 1 {
+                    if let Some((a, s)) =
+                        self.clone().remove_unneeded_brackets(rule_cx.clone(), bracketed)
+                    {
+                        anchor = Some(a);
+                        seq = Some(s);
+                    } else {
+                        anchor = Some(modifier[0].clone());
+                        seq = Some(ReflowSequence::from_around_target(
+                            &modifier[0],
+                            rule_cx.parent_stack[0].clone(),
+                            "after",
+                            rule_cx.config.clone().unwrap(),
+                        ));
                     }
                 }
-            }  else if rule_cx.segment.is_type("function") {
+            }
+        } else if rule_cx.segment.is_type("function") {
             anchor = Some(rule_cx.parent_stack[rule_cx.parent_stack.len() - 1].clone());
 
             if anchor.clone().unwrap().is_type("expression")
