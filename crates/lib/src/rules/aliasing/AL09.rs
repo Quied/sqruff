@@ -36,55 +36,46 @@ impl Rule for RuleAL09 {
 
             if let Some(column) = column {
                 if let Some(alias_expression) = alias_expression {
-                if column.child(&["identifier", "naked_identifier"]).is_some()
-                    || column.child(&["quoted_identifier"]).is_some()
-                {
-                    let whitespace = clause_element.child(&["whitespace"]).unwrap();
-
-                    let column_identifier =
-                        if let Some(quoted_identifier) = column.child(&["quoted_identifier"]) {
-                            quoted_identifier.clone()
-                        } else {
-                            column
-                                .children(&["identifier", "naked_identifier"])
-                                .last()
-                                .expect("No naked_identifier found")
-                                .clone()
-                        };
-
-            
-                        let alias_identifier = match alias_expression
-                        .child(&["identifier", "naked_identifier"]) {
-                        Some(child) => child,
-                        None => {
-                            alias_expression
-                                .child(&["quoted_identifier"])
-                                .expect("quoted_identifier are None")
-                        }
-                    };
-                    
-                    
-
-                    if column_identifier.get_raw_upper()
-                        == alias_identifier.get_raw_upper()
+                    if column.child(&["identifier", "naked_identifier"]).is_some()
+                        || column.child(&["quoted_identifier"]).is_some()
                     {
-                        let mut fixes: Vec<LintFix> = Vec::new();
+                        let whitespace = clause_element.child(&["whitespace"]).unwrap();
 
-                        fixes.push(LintFix::delete(whitespace));
-                        fixes.push(LintFix::delete(alias_expression));
+                        let column_identifier =
+                            if let Some(quoted_identifier) = column.child(&["quoted_identifier"]) {
+                                quoted_identifier.clone()
+                            } else {
+                                column
+                                    .children(&["identifier", "naked_identifier"])
+                                    .last()
+                                    .expect("No naked_identifier found")
+                                    .clone()
+                            };
 
-                        violations.push(LintResult::new(
-                            Some(clause_element_raw_segment[0].clone()),
-                            fixes,
-                            None,
-                            Some(format!("Column should not be self-aliased.")),
-                            None,
-                        ));
+                        let alias_identifier = alias_expression
+                            .child(&["naked_identifier"])
+                            .or_else(|| alias_expression.child(&["quoted_identifier"]))
+                            .expect("identifier is none");
+
+                        
+                        if column_identifier.get_raw_upper() == alias_identifier.get_raw_upper() {
+                            let mut fixes: Vec<LintFix> = Vec::new();
+
+                            fixes.push(LintFix::delete(whitespace));
+                            fixes.push(LintFix::delete(alias_expression));
+
+                            violations.push(LintResult::new(
+                                Some(clause_element_raw_segment[0].clone()),
+                                fixes,
+                                None,
+                                Some(format!("Column should not be self-aliased.")),
+                                None,
+                            ));
+                        }
                     }
                 }
             }
         }
-    }
         violations
     }
 
