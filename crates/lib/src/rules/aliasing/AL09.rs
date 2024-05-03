@@ -57,7 +57,6 @@ impl Rule for RuleAL09 {
                             .or_else(|| alias_expression.child(&["quoted_identifier"]))
                             .expect("identifier is none");
 
-                        
                         if column_identifier.get_raw_upper() == alias_identifier.get_raw_upper() {
                             let mut fixes: Vec<LintFix> = Vec::new();
 
