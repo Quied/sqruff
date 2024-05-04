@@ -1,5 +1,3 @@
-use std::collections::btree_set::Union;
-
 use crate::core::config::Value;
 use crate::core::parser::segments::base::{
     ErasedSegment, Segment, SymbolSegment, SymbolSegmentNewArgs, WhitespaceSegment,
@@ -9,38 +7,29 @@ use crate::core::parser::segments::keyword::KeywordSegment;
 use crate::core::rules::base::{ErasedRule, LintFix, LintResult, Rule};
 use crate::core::rules::context::RuleContext;
 use crate::core::rules::crawlers::{Crawler, SegmentSeekerCrawler};
+use crate::helpers::ToErasedSegment;
 use crate::utils::functional::segments::Segments;
-use crate::utils::reflow::sequence::ReflowSequence;
+use crate::utils::reflow::sequence::{Filter, ReflowSequence};
 
-enum CorrectionListType {
+enum CorrectionListItem {
     WhitespaceSegment,
-    KeywordSegment,
+    KeywordSegment(String),
 }
 
-type CorrectionList = Vec<CorrectionListType>;
+type CorrectionList = Vec<CorrectionListItem>;
 
 #[derive(Default, Clone, Debug)]
 pub struct RuleCV05 {}
 
-impl RuleCV05 {
-    pub fn create_base_is_null_sequence(
-        self,
-        is_super: bool,
-        operator_raw: String,
-    ) -> CorrectionList {
-        let check_is_seg = if is_super { "IS" } else { "is" };
-        let is_seg = KeywordSegment::new(check_is_seg.to_owned(), None);
+pub fn create_base_is_null_sequence(is_upper: bool, operator_raw: String) -> CorrectionList {
+    let is_seg = CorrectionListItem::KeywordSegment(if is_upper { "IS" } else { "is" }.to_string());
+    let not_seg =
+        CorrectionListItem::KeywordSegment(if is_upper { "NOT" } else { "not" }.to_string());
 
-        let check_not_seg = if is_super { "NOT" } else { "not" };
-        let not_seg = KeywordSegment::new(check_not_seg.to_owned(), None);
-
-        let ret = CorrectionListType::KeywordSegment;
-
-        if operator_raw == "=" {
-            return vec![ret];
-        } else {
-            return vec![ret, CorrectionListType::WhitespaceSegment, CorrectionListType::not_seg];
-        }
+    if operator_raw == "=" {
+        vec![is_seg]
+    } else {
+        vec![is_seg, CorrectionListItem::WhitespaceSegment, not_seg]
     }
 }
 
@@ -107,19 +96,33 @@ impl Rule for RuleCV05 {
             &sub_seg.as_ref().unwrap().get_raw(),
         );
 
-        let edit = self.create_base_is_null_sequence(
+        let edit = create_base_is_null_sequence(
             sub_seg.as_ref().unwrap().get_raw().unwrap() == "N",
             rule_cx.segment.get_raw().unwrap(),
         );
+
+        let mut seg: &[ErasedSegment] = &Vec::new();
+
+        for item in edit {
+            match item {
+                CorrectionListItem::KeywordSegment(keyword) => {
+                    KeywordSegment::new(keyword, None).to_erased_segment()
+                }
+                // CorrectionListItem::WhitespaceSegment => WhitespaceSegment::new(&self, segments),
+            };
+        }
 
         let fixes = ReflowSequence::from_around_target(
             &rule_cx.segment,
             rule_cx.parent_stack[0],
             "both",
             rule_cx.config.unwrap(),
-        );
+        )
+        .replace(rule_cx.segment, seg)
+        .respace(false, Filter::All)
+        .fixes();
 
-        vec![LintResult::new(Some(rule_cx.segment.clone()), fixes.fixes(), None, None, None)]
+        vec![LintResult::new(Some(rule_cx.segment.clone()), fixes, None, None, None)]
     }
 }
 
@@ -271,15 +274,15 @@ mod test {
         let pass_str = r#"ALTER TABLE table
                                 SET OPTIONS (expiration_timestamp = NULL);"#;
 
-            let violations = lint(
+        let violations = lint(
             pass_str.to_owned(),
             "bigquery".into(),
             vec![RuleCV05::default().erased()],
             None,
             None,
-            )
-            .unwrap();
-            assert_eq!(violations, []);
+        )
+        .unwrap();
+        assert_eq!(violations, []);
     }
 
     #[test]
@@ -291,11 +294,11 @@ mod test {
                                 @param4 = 'blah'"#;
 
         let violations = lint(
-        pass_str.to_owned(),
-        "tsql".into(),
-        vec![RuleCV05::default().erased()],
-        None,
-        None,
+            pass_str.to_owned(),
+            "tsql".into(),
+            vec![RuleCV05::default().erased()],
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(violations, []);
@@ -305,26 +308,26 @@ mod test {
     fn test_tsql_alternate_alias_syntax() {
         let pass_str = r#"select name = null from t"#;
 
-            let violations = lint(
+        let violations = lint(
             pass_str.to_owned(),
             "tsql".into(),
             vec![RuleCV05::default().erased()],
             None,
             None,
-            )
-            .unwrap();
-            assert_eq!(violations, []);
+        )
+        .unwrap();
+        assert_eq!(violations, []);
     }
     #[test]
     fn test_exclude_constraint() {
         let pass_str = r#"alter table abc add constraint xyz exclude (field WITH =);"#;
 
         let violations = lint(
-        pass_str.to_owned(),
-        "postgres".into(),
-        vec![RuleCV05::default().erased()],
-        None,
-        None,
+            pass_str.to_owned(),
+            "postgres".into(),
+            vec![RuleCV05::default().erased()],
+            None,
+            None,
         )
         .unwrap();
         assert_eq!(violations, []);
