@@ -1,5 +1,5 @@
 use crate::core::config::Value;
-use crate::core::parser::segments::base::{ ErasedSegment, SymbolSegment};
+use crate::core::parser::segments::base::{ErasedSegment, SymbolSegment};
 use crate::core::rules::base::{ErasedRule, LintFix, LintResult, Rule};
 use crate::core::rules::context::RuleContext;
 use crate::core::rules::crawlers::{Crawler, SegmentSeekerCrawler};
