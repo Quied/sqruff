@@ -1,5 +1,5 @@
 use crate::core::config::Value;
-use crate::core::parser::segments::base::{ErasedSegment, SymbolSegment};
+use crate::core::parser::segments::base::{ ErasedSegment, SymbolSegment};
 use crate::core::rules::base::{ErasedRule, LintFix, LintResult, Rule};
 use crate::core::rules::context::RuleContext;
 use crate::core::rules::crawlers::{Crawler, SegmentSeekerCrawler};
@@ -163,12 +163,7 @@ mod tests {
 
     #[test]
     fn test_fail_templated() {
-        let fail_str = r#"
-        SELECT
-        {% for col in ['a', 'b', 'c'] %}
-            {{col}},
-        {% endfor %}
-    FROM tbl
+        let fail_str = r#"SELECT {% for col in ['a', 'b', 'c'] %} {{col}}, {% endfor %}FROM tbl
     "#;
         let fix_str = r#"
         SELECT
