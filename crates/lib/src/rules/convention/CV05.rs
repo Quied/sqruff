@@ -4,7 +4,7 @@ use crate::core::parser::segments::base::{
     WhitespaceSegmentNewArgs,
 };
 use crate::core::parser::segments::keyword::KeywordSegment;
-use crate::core::rules::base::{ErasedRule, LintFix, LintResult, Rule};
+use crate::core::rules::base::{ErasedRule, LintResult, Rule};
 use crate::core::rules::context::RuleContext;
 use crate::core::rules::crawlers::{Crawler, SegmentSeekerCrawler};
 use crate::helpers::ToErasedSegment;
@@ -21,7 +21,7 @@ type CorrectionList = Vec<CorrectionListItem>;
 #[derive(Default, Clone, Debug)]
 pub struct RuleCV05 {}
 
-pub fn create_base_is_null_sequence(is_upper: bool, operator_raw: String) -> CorrectionList {
+fn create_base_is_null_sequence(is_upper: bool, operator_raw: String) -> CorrectionList {
     let is_seg = CorrectionListItem::KeywordSegment(if is_upper { "IS" } else { "is" }.to_string());
     let not_seg =
         CorrectionListItem::KeywordSegment(if is_upper { "NOT" } else { "not" }.to_string());
@@ -81,7 +81,9 @@ impl Rule for RuleCV05 {
             }
         }
 
-        let segment = rule_cx.parent_stack[rule_cx.parent_stack.len() - 1]; // ##### 
+        // let segment = rule_cx.parent_stack[rule_cx.parent_stack.len() -
+        // 1].segments(); // #####
+        let segment = rule_cx.parent_stack[rule_cx.parent_stack.len() - 1].clone_box(); // ##### 
         let siblings = Segments::new(segment, None);
 
         let after_op_list = siblings.select(None, None, Some(&rule_cx.segment), None);
@@ -101,24 +103,30 @@ impl Rule for RuleCV05 {
             rule_cx.segment.get_raw().unwrap(),
         );
 
-        let mut seg: &[ErasedSegment] = &Vec::new();
+        let mut seg = Vec::new();
 
         for item in edit {
             match item {
                 CorrectionListItem::KeywordSegment(keyword) => {
-                    KeywordSegment::new(keyword, None).to_erased_segment()
+                    seg.push(KeywordSegment::new(keyword, None).to_erased_segment());
                 }
-                // CorrectionListItem::WhitespaceSegment => WhitespaceSegment::new(&self, segments),
+                CorrectionListItem::WhitespaceSegment => {
+                    seg.push(WhitespaceSegment::create(
+                        " ",
+                        &<_>::default(),
+                        WhitespaceSegmentNewArgs,
+                    ));
+                }
             };
         }
 
         let fixes = ReflowSequence::from_around_target(
             &rule_cx.segment,
-            rule_cx.parent_stack[0],
+            rule_cx.parent_stack[0].clone(),
             "both",
             rule_cx.config.unwrap(),
         )
-        .replace(rule_cx.segment, seg)
+        .replace(rule_cx.segment.clone(), &seg)
         .respace(false, Filter::All)
         .fixes();
 
